@@ -11,43 +11,47 @@ export default function Body({ headerBackground }) {
 
   useEffect(() => {
     const getInitialPlaylist = async () => {
-      const response = await axios.get(
-        `https://api.spotify.com/v1/playlists/${selectedPlaylistId}`,
-        {
-          headers: {
-            Authorization: "Bearer " + token,
-            "Content-Type": "application/json",
-          },
-        }
-      );
+      try {
+        const response = await axios.get(
+          `https://api.spotify.com/v1/playlists/${selectedPlaylistId}`,
+          {
+            headers: {
+              Authorization: "Bearer " + token,
+              "Content-Type": "application/json",
+            },
+          }
+        );
 
-      const selectedPlaylist = {
-        id: response.data.id,
-        name: response.data.name,
-        description: response.data.description.startsWith("<a")
-          ? ""
-          : response.data.description,
-        image: response.data.images[0].url,
-        tracks: response.data.tracks.items.map(({ track }) => ({
-          id: track.id,
-          name: track.name,
-          artists: track.artists.map((artist) => ({
-            name: artist.name,
-            context_uri: artist.uri,
+        const selectedPlaylist = {
+          id: response.data.id,
+          name: response.data.name,
+          description: response.data.description.startsWith("<a")
+            ? ""
+            : response.data.description,
+          image: response.data.images[0].url,
+          tracks: response.data.tracks.items.map(({ track }) => ({
+            id: track.id,
+            name: track.name,
+            artists: track.artists.map((artist) => ({
+              name: artist.name,
+              context_uri: artist.uri,
+            })),
+            image: track.album.images[2].url,
+            duration: track.duration_ms,
+            album: track.album.name,
+            context_uri: track.album.uri,
+            track_number: track.track_number,
           })),
-          image: track.album.images[2].url,
-          duration: track.duration_ms,
-          album: track.album.name,
-          context_uri: track.album.uri,
-          track_number: track.track_number,
-        })),
-      };
+        };
 
-      setSelectedPlaylist(selectedPlaylist);
-      dispatch({
-        type: reducerCases.SET_PLAYLIST,
-        selectedPlaylist,
-      });
+        setSelectedPlaylist(selectedPlaylist);
+        dispatch({
+          type: reducerCases.SET_PLAYLIST,
+          selectedPlaylist,
+        });
+      } catch (error) {
+        console.error("Error fetching initial playlist:", error);
+      }
     };
 
     getInitialPlaylist();
@@ -59,7 +63,48 @@ export default function Body({ headerBackground }) {
     return minutes + ":" + (seconds < 10 ? "0" : "") + seconds;
   };
 
-
+  const playTrack = async (
+    id,
+    name,
+    artists,
+    image,
+    context_uri,
+    track_number
+  ) => {
+    try {
+      const response = await axios.put(
+        `https://api.spotify.com/v1/me/player/play`,
+        {
+          context_uri,
+          offset: {
+            position: track_number - 1,
+          },
+          position_ms: 0,
+        },
+        {
+          headers: {
+            Authorization: "Bearer " + token,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+  
+      if (response.status === 204) {
+        const currentlyPlaying = {
+          id,
+          name,
+          artists,
+          image, // Include the new image here
+        };
+        dispatch({ type: reducerCases.SET_PLAYING, currentlyPlaying });
+        dispatch({ type: reducerCases.SET_PLAYER_STATE, playerState: true });
+      } else {
+        dispatch({ type: reducerCases.SET_PLAYER_STATE, playerState: true });
+      }
+    } catch (error) {
+      console.error("Error playing track:", error);
+    }
+  };
 
   return (
     <Container headerBackground={headerBackground}>
@@ -108,7 +153,20 @@ export default function Body({ headerBackground }) {
                   index
                 ) => {
                   return (
-                    <div className="row" key={id}>
+                    <div
+                      className="row"
+                      key={id}
+                      onClick={() =>
+                        playTrack(
+                          id,
+                          name,
+                          artists,
+                          image,
+                          context_uri,
+                          track_number
+                        )
+                      }
+                    >
                       <div className="col">
                         <span>{index + 1}</span>
                       </div>
@@ -118,7 +176,8 @@ export default function Body({ headerBackground }) {
                         </div>
                         <div className="info">
                           <span className="name">{name}</span>
-                          <div className="artist">{artists.map((artist) => artist.name).join(", ")  }                        
+                          <div className="artist">
+                            {artists.map((artist) => artist.name).join(", ")}
                           </div>
                         </div>
                       </div>
@@ -139,6 +198,7 @@ export default function Body({ headerBackground }) {
     </Container>
   );
 }
+
 
 const Container = styled.div`
   .playlist {
